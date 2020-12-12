@@ -1,11 +1,10 @@
 # ECEM
-Entropy-based crowd evacuation model
+Entropy-based crowd evacuation model program.
 
 ## Environment Dependency
 
 Please download NetLogo simulation software with version 6.0.4 
-from http://ccl.northwestern.edu/netlogo/ and follow its instructions
-to install it. 
+from http://ccl.northwestern.edu/netlogo/ and install it following the instructions. 
 
 ## Run the program
 Please follow the below steps to run the program.
@@ -20,7 +19,7 @@ re-assign the other parameters in the simulation, including the total number
 of evacuees, individual view distance and angle, etc.;
 * step 5: for single evacuation simulation, 
     * press the “Setup” button, the command center will show 
-    “observer:’Initialization completed!’”; then press the “Go” button
+    “observer: ’Initialization completed!’”; then press the “Go” button
      to start simulation;
     * when all the agents escape from the exit, the simulation is finished;
      and the evacuation time and maximum instantaneous entropy of the crowd 
@@ -28,9 +27,9 @@ of evacuees, individual view distance and angle, etc.;
     * the changes of population velocity and entropy can be observed from
     the plot diagrams on the right side;
     * right-click the plot and select “export” item to save the data 
-    as a Excel file.
-* step 6: for multiple evacuation simulation and the average result,
-determine the number of simulation trials in the “num” Input box; 
+    as a Excel file;
+* step 6: for multiple evacuation simulations and the average result,
+set the number of simulation trials in the “num” Input box; 
 then press the “Average” button. When all the simulations are complete, 
 the command center outputs the average evacuation time and 
 maximum entropy of the crowd.
