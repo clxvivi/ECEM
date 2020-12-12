@@ -1,0 +1,424 @@
+globals[
+  box-edge
+  out-count
+  exit-patch
+  ALL-N;;number of all evacuees
+  r;;individual vision radius
+  angle
+  max-V
+  crowd-E
+ ]
+
+breed [particles particle]
+
+particles-own[
+  speed
+  family
+  memory;;记录同伴历史位置
+  entropy
+  ve
+  va
+  vc
+  vs
+  dv
+  new-V
+]
+
+patches-own [
+  field
+  pentropy
+]
+
+to setup
+  clear-all
+  ;random-seed 1537
+
+  set r 5
+  set angle 200
+  set ALL-N 200
+  set max-V 2
+  set crowd-E 0
+
+  build-wall
+  build-exits
+  build-obstacle
+  ask patches with [pcolor = white][set field distancexy box-edge 0]
+  ask patches with [pcolor = black][set field 1000]
+  ask patches with [pcolor = green][set field 0]
+  ask patches [set pentropy 0]
+  make-particles
+
+  if show-trace?;;显示路径
+    [ask particles [pen-down]]
+
+  show "Initialization completed!"
+
+  reset-ticks
+end
+
+to average;;实现多次仿真并计算平均结果
+  let i num
+  let aver-T 0
+  let aver-crowdE 0
+  loop [
+    ifelse i = 0 [
+      set aver-T aver-T / num
+      set aver-crowdE aver-crowdE / num
+      show word "Averge escape time is " aver-T
+      show word "Average maximum crowd enropy is" aver-crowdE
+      stop]
+    [
+      setup
+      while [out-count < ALL-N]
+      [go]
+      set i i - 1
+      set aver-T aver-T + ticks
+      set aver-crowdE aver-crowdE + crowd-E
+    ]
+  ]
+end
+
+to go
+  ask patches with [pcolor != black and pcolor != green][set pcolor white]
+
+  if Recolor?
+  [
+    ask patches with [pcolor != black and pcolor != green][
+      set pentropy calculate-entropy particles in-radius 1.5
+      set pcolor 129.9 - pentropy * 35
+    ]
+    ask particles [ht]
+    ask links [hide-link]
+  ]
+
+  move
+
+  let tcrowd-E calculate-entropy particles
+  if crowd-E < tcrowd-E [set crowd-E tcrowd-E ]
+
+  check-exit
+
+  if out-count = ALL-N
+  [
+    show word "Evacuation time is " ticks
+    show word "Maximum crowd entropy is" crowd-E
+    stop
+  ]
+  tick
+end
+
+to build-wall
+  set box-edge max-pxcor
+  ask patches [ set pcolor white ]
+  ask patches with [ ((abs pxcor = box-edge) and (abs pycor <= box-edge)) or
+                     ((abs pycor = box-edge) and (abs pxcor <= box-edge)) ]
+  [set pcolor black]
+end
+
+to build-obstacle
+  ask patches with [ pxcor > -8 and pxcor < -5 and pycor < 16 and pycor > 6] [set pcolor black]
+  ask patches with [pxcor > 6  and pxcor < 10 and pycor > -16 and pycor < -10] [set pcolor black]
+  ask patches with [pxcor < 3 and pxcor > -6 and pycor > -6 and pycor < -3] [set pcolor black]
+end
+
+to build-exits
+  set exit-patch patches with [ (abs pycor <= 1) and (pxcor = box-edge)]
+  ask exit-patch [set pcolor green]
+end
+
+to make-particles
+  set-default-shape turtles "circle"
+  create-particles ALL-N [setup-particle]
+  foreach sort-on [who] particles [ the-particle ->
+    ask the-particle [
+      random-position
+      while [overlapping?] [ random-position ]
+    ]
+  ]
+  classify
+end
+
+to-report overlapping?
+  report any? other particles with [distance myself < size] or pcolor = black
+end
+
+to setup-particle
+  set size 0.6
+  set speed random-normal 1.5 0.15
+  set entropy 0
+  set color gray
+  set family nobody
+  set memory nobody
+end
+
+to classify
+  ask particles with [who < usp] [
+    set color pink
+    let myx xcor
+    let myy ycor
+
+    set family one-of other particles with [who >= usp and color != pink] in-radius usd;;选距离小于usd的粒子作同伴
+    if family = nobody[set family min-one-of particles with [who >= usp and color != pink] [distance myself]]
+    ask family [set color pink]
+    create-link-with family
+    ;[hide-link]
+    set memory list [xcor] of family [ycor] of family
+  ]
+  ask particles with [color = pink and family = nobody]
+  [ set family one-of link-neighbors
+    set memory list [xcor] of family [ycor] of family
+  ]
+end
+
+to random-position
+  setxy one-of [1 -1] * random-float (box-edge - 0.5 - size / 2)
+        one-of [1 -1] * random-float (box-edge - 0.5 - size / 2)
+end
+
+to check-exit
+  ask exit-patch[
+    if any? particles-here
+    [
+      set out-count out-count + count particles-here
+      ask particles-here [die]
+    ]
+  ]
+end
+
+to move
+  ask particles[
+    let ax xcor
+    let ay ycor
+    ;;visual perception
+    let visible-particles other particles in-cone r angle
+    let visible-patches patches with [pcolor != black and pcolor != green] in-cone r angle
+    if any? patches with [pcolor = black] in-cone r angle
+    [
+      let visible-obs patches with [pcolor = black] in-cone r angle
+      let in-shadow nobody
+      let all-shadow nobody
+      ask visible-obs[
+        let dxap1 pxcor + 0.5 - ax
+        let dxap2 pxcor - 0.5 - ax
+        let dyap1 pycor + 0.5 - ay
+        let dyap2 pycor - 0.5 - ay
+        let tr1 atan dxap1 dyap1
+        let tr2 atan dxap1 dyap2
+        let tr3 atan dxap2 dyap1
+        let tr4 atan dxap2 dyap2
+        let maxtr max (list tr1 tr2 tr3 tr4)
+        let mintr min (list tr1 tr2 tr3 tr4)
+        let od sqrt ((pxcor - ax) ^ 2 + (pycor - ay) ^ 2)
+
+        ifelse dxap1 * dxap2 < 0 and dyap2 > 0
+        [
+          let alist sort (list tr1 tr2 tr3 tr4)
+          set in-shadow visible-patches with [distancexy ax ay > od and pcolor != black
+                                              and (atan (pxcor - ax) (pycor - ay) < item 1 alist or atan (pxcor - ax) (pycor - ay) > item 2 alist)]
+        ][
+          set in-shadow visible-patches with [distancexy ax ay > od and pcolor != black
+                                              and atan (pxcor - ax) (pycor - ay) > mintr and atan (pxcor - ax) (pycor - ay) < maxtr]]
+          set all-shadow (patch-set all-shadow in-shadow)
+        ]
+        set visible-patches visible-patches with [not member? self all-shadow]
+
+        if [particles-here] of visible-patches != nobody
+        [set visible-particles other particles-on visible-patches]
+     ]
+
+    set entropy calculate-entropy visible-particles
+    let alpha entropy / 2
+
+    let vx0 dx
+    let vy0 dy
+    let we uwe
+    let wa uwa
+    let wc uwc
+    let ws uws
+
+    ;;exit velocity
+    let escapex 0
+    let escapey 0
+    let escape-goal min-one-of exit-patch [distance myself]
+    ;;exit is visible or not?
+    ifelse any? exit-patch in-radius r
+    [
+      if distancexy box-edge 0 < 2 [set wc 0]
+    ]
+    [
+      ifelse not any? visible-patches [set escape-goal patch-ahead -1]
+      [set escape-goal min-one-of visible-patches [distancexy box-edge 0]]
+    ]
+    set escapex ([pxcor] of escape-goal) - xcor
+    set escapey ([pycor] of escape-goal) - ycor
+    set ve sqrt (escapex ^ 2 + escapey ^ 2)
+
+    ;;avoidance velocity
+    let avoidx 0
+    let avoidy 0
+    if any? visible-particles with [distance myself < 2]
+    [
+      let close-p min-one-of visible-particles with [distance myself < 2] [distance myself]
+      set avoidx xcor - [xcor] of close-p
+      set avoidy ycor - [ycor] of close-p
+    ]
+    if any? patches with [pcolor = black] in-cone 2 angle
+    [
+      let close-o min-one-of patches with [pcolor = black] in-cone 2 angle [distance myself]
+      set avoidx avoidx + xcor - [pxcor] of close-o
+      set avoidy avoidy + ycor - [pycor] of close-o
+    ]
+    set va sqrt (avoidx ^ 2 + avoidy ^ 2)
+
+    ;;cohesion velocity
+    let coherex 0
+    let coherey 0
+    if any? visible-particles
+    [
+      let close-p visible-particles
+      set coherex (sum [xcor] of close-p) / (count close-p) - xcor
+      set coherey (sum [ycor] of close-p) / (count close-p) - ycor
+    ]
+    set vc sqrt (coherex ^ 2 + coherey ^ 2)
+
+    ;;velocity update when don't seeking
+    let dvx we * escapex + wa * avoidx + wc * coherex
+    let dvy we * escapey + wa * avoidy + wc * coherey
+
+    ;;seeking velocity
+    let seekx 0
+    let seeky 0
+    if family != nobody
+    [
+      let df distance family
+      let de distancexy box-edge 0
+      let fde 0
+      ask family [set fde distancexy box-edge 0 ]
+      ;;whether to seek or not
+      ifelse df <= usd or (de <= r and fde <= r)
+      [  set color pink
+         set memory list [xcor] of family [ycor] of family
+         set vs 0
+      ][
+        ;;family is visible
+        ifelse member? family visible-particles
+        [ set color sky
+          set memory list [xcor] of family [ycor] of family
+          set seekx [xcor] of family - xcor
+          set seeky [ycor] of family - ycor
+        ]
+        ;;family is non-visible
+        [ set color black
+          let fx item 0 memory
+          let fy item 1 memory
+          ifelse fx = xcor and fy = ycor[
+            ask visible-patches [set pcolor 99]
+            let goal nobody
+            ifelse any? visible-patches[
+              set goal one-of visible-patches
+              ][set goal one-of neighbors with [pcolor != black]
+            ]
+            set seekx [pxcor] of goal - xcor
+            set seeky [pycor] of goal - ycor
+            ][set seekx fx - xcor
+              set seeky fy - ycor
+           ]
+         ]
+        ;;velocity update when seeking
+        set vs sqrt (seekx ^ 2 + seeky ^ 2)
+        set dvx ws * seekx + (1 - ws) * escapex
+        set dvy ws * seeky + (1 - ws) * escapey
+        ]
+     ]
+
+    set dv sqrt (dvx ^ 2 + dvy ^ 2)
+    if dv > max-V [ set dvx dvx * max-V / dv
+                    set dvy dvy * max-V / dv]
+    set dv sqrt (dvx ^ 2 + dvy ^ 2)
+    let new-vx alpha * vx0 + (1 - alpha) * dvx
+    let new-vy alpha * vy0 + (1 - alpha) * dvy
+    set new-V sqrt (new-vx ^ 2 + new-vy ^ 2)
+    set speed min list max-V new-V
+    ifelse (new-vx != 0) or (new-vy != 0) [set heading atan new-vx new-vy][show "speed is 0"]
+
+    ;;velocity correction
+    if patch-ahead speed != nobody
+    [
+      let gx xcor + speed * dx
+      let gy ycor + speed * dy
+      let dspeed speed + 0.3
+      let theading heading
+
+      if any? other particles with [distancexy gx gy < size] or patch-ahead dspeed = nobody or [pcolor] of patch-ahead dspeed = black
+      [
+        ;;decrease velocity in half
+        set gx xcor + speed / 2 * dx
+        set gy ycor + speed / 2 * dy
+        set dspeed speed / 2 + 0.3
+        ifelse any? other particles with [distancexy gx gy < size] or patch-ahead dspeed = nobody or [pcolor] of patch-ahead dspeed = black
+        [
+        ;; turn to the direction with the lowest crowd density
+          let near-area patches with [pcolor != black] in-cone r angle
+          face min-one-of near-area [count particles-here]
+          set gx xcor + speed * dx
+          set gy ycor + speed * dy
+          set dspeed speed + 0.3
+          if any? other particles with [distancexy gx gy < size] or patch-ahead dspeed = nobody or [pcolor] of patch-ahead dspeed = black
+          [ set speed 0 ]
+         ][ set speed speed / 2]
+      ]
+
+      ;;position update
+      jump speed
+      ]
+ ]
+
+end
+
+to-report calculate-entropy [turtleset]
+  let N count turtleset
+  ifelse N != 0
+  [
+    ;;Velocity distribution of particles
+    let a1 count turtleset with [ heading >= 0 and heading < 90 and speed >= 0 and speed < 0.5 ]
+    let a2 count turtleset with [ heading >= 0 and heading < 90 and speed >= 0.5 and speed < 1 ]
+    let a3 count turtleset with [ heading >= 0 and heading < 90 and speed >= 1 and speed < 1.5 ]
+    let a4 count turtleset with [ heading >= 0 and heading < 90 and speed >= 1.5 and speed <= 2 ]
+    let b1 count turtleset with [ heading >= 90 and heading < 180 and speed >= 0 and speed < 0.5 ]
+    let b2 count turtleset with [ heading >= 90 and heading < 180 and speed >= 0.5 and speed < 1 ]
+    let b3 count turtleset with [ heading >= 90 and heading < 180 and speed >= 1 and speed < 1.5 ]
+    let b4 count turtleset with [ heading >= 90 and heading < 180 and speed >= 1.5 and speed <= 2 ]
+    let c1 count turtleset with [ heading >= 180 and heading < 270 and speed >= 0 and speed < 0.5 ]
+    let c2 count turtleset with [ heading >= 180 and heading < 270 and speed >= 0.5 and speed < 1 ]
+    let c3 count turtleset with [ heading >= 180 and heading < 270 and speed >= 1 and speed < 1.5 ]
+    let c4 count turtleset with [ heading >= 180 and heading < 270 and speed >= 1.5 and speed <= 2 ]
+    let d1 count turtleset with [ heading >= 270 and heading < 360 and speed >= 0 and speed < 0.5 ]
+    let d2 count turtleset with [ heading >= 270 and heading < 360 and speed >= 0.5 and speed < 1 ]
+    let d3 count turtleset with [ heading >= 270 and heading < 360 and speed >= 1 and speed < 1.5 ]
+    let d4 count turtleset with [ heading >= 270 and heading < 360 and speed >= 1.5 and speed <= 2 ]
+
+    ;;Boltzmann entropy
+      let vlist sort-by > (list a1 a2 a3 a4 b1 b2 b3 b4 c1 c2 c3 c4 d1 d2 d3 d4)
+      let H 0
+      let i 0
+      while [ i < 16]
+      [ set H H + ln Cf N item i vlist
+        set N N - item i vlist
+        set i i + 1]
+      let k 0.0138
+      report k * H
+  ]
+  [report 0]
+end
+
+;;combinatorial number C(a,b)
+to-report Cf [a b]
+  ifelse a = 0 or b = 0 [report 1][
+    let i b
+    let j 1
+    while [i > 0]
+    [ set j j * ( a - i + 1) / i
+      set i i - 1]
+    report j
+  ]
+end
