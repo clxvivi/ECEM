@@ -33,3 +33,12 @@ set the number of simulation trials in the “num” Input box;
 then press the “Average” button. When all the simulations are complete, 
 the command center outputs the average evacuation time and 
 maximum entropy of the crowd.
+
+## Note
+ * To view the global population entropy distribution, flip the “Rcolor?” switch
+  to on before starting simulation.
+ * The two monitors, “seek-times1” and “seek-times2”, on the left display
+  the number of times a small social group looks for visible and invisible 
+  peers, respectively. 
+ * The figures are drawn by creating an Excel file to record the simulation
+  data displayed in the command center window.
