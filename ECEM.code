@@ -7,6 +7,8 @@ globals[
   angle
   max-V
   crowd-E
+  seek-times1
+  seek-times2
  ]
 
 breed [particles particle]
@@ -31,25 +33,31 @@ patches-own [
 
 to setup
   clear-all
-  ;random-seed 1537
+  ;random-seed 18344
 
   set r 5
   set angle 200
   set ALL-N 200
   set max-V 2
   set crowd-E 0
+  set seek-times1 0
+  set seek-times2 0
 
   build-wall
   build-exits
   build-obstacle
+  add-obstacle
   ask patches with [pcolor = white][set field distancexy box-edge 0]
   ask patches with [pcolor = black][set field 1000]
   ask patches with [pcolor = green][set field 0]
   ask patches [set pentropy 0]
   make-particles
 
-  if show-trace?;;显示路径
-    [ask particles [pen-down]]
+  if Recolor?
+  [
+    ask particles [ht]
+    ask links [hide-link]
+  ]
 
   show "Initialization completed!"
 
@@ -60,12 +68,17 @@ to average;;实现多次仿真并计算平均结果
   let i num
   let aver-T 0
   let aver-crowdE 0
+  let aver-ST1 0
+  let aver-ST2 0
   loop [
     ifelse i = 0 [
       set aver-T aver-T / num
       set aver-crowdE aver-crowdE / num
+      set aver-ST1 aver-ST1 / num
+      set aver-ST2 aver-ST2 / num
       show word "Averge escape time is " aver-T
       show word "Average maximum crowd enropy is" aver-crowdE
+      show (word "Averge seeking time are " aver-ST1 " and " aver-ST2)
       stop]
     [
       setup
@@ -74,6 +87,8 @@ to average;;实现多次仿真并计算平均结果
       set i i - 1
       set aver-T aver-T + ticks
       set aver-crowdE aver-crowdE + crowd-E
+      set aver-ST1 aver-ST1 + seek-times1
+      set aver-ST2 aver-ST2 + seek-times2
     ]
   ]
 end
@@ -87,8 +102,6 @@ to go
       set pentropy calculate-entropy particles in-radius 1.5
       set pcolor 129.9 - pentropy * 35
     ]
-    ask particles [ht]
-    ask links [hide-link]
   ]
 
   move
@@ -119,6 +132,14 @@ to build-obstacle
   ask patches with [ pxcor > -8 and pxcor < -5 and pycor < 16 and pycor > 6] [set pcolor black]
   ask patches with [pxcor > 6  and pxcor < 10 and pycor > -16 and pycor < -10] [set pcolor black]
   ask patches with [pxcor < 3 and pxcor > -6 and pycor > -6 and pycor < -3] [set pcolor black]
+end
+
+to add-obstacle
+  ask patches with [ pxcor > -12 and pxcor < -10 and pycor < -5 and pycor > -13] [set pcolor black]
+  ask patches with [ pxcor > -11 and pxcor < -8 and pycor < 5 and pycor > -2] [set pcolor black]
+  ask patches with [ pxcor > 8 and pxcor < 14 and pycor < 7 and pycor > 3] [set pcolor black]
+  ask patches with [ pxcor > 3 and pxcor < 8 and pycor < 15 and pycor > 12] [set pcolor black]
+  ask patches with [ pxcor > -1 and pxcor < 2 and pycor < 10 and pycor > 0] [set pcolor black]
 end
 
 to build-exits
@@ -152,7 +173,7 @@ to setup-particle
 end
 
 to classify
-  ask particles with [who < usp] [
+  ask particles with [who < usp * all-N / 2] [
     set color pink
     let myx xcor
     let myy ycor
@@ -303,12 +324,14 @@ to move
         ;;family is visible
         ifelse member? family visible-particles
         [ set color sky
+          set seek-times1 seek-times1 + 1
           set memory list [xcor] of family [ycor] of family
           set seekx [xcor] of family - xcor
           set seeky [ycor] of family - ycor
         ]
         ;;family is non-visible
         [ set color black
+          set seek-times2 seek-times2 + 1
           let fx item 0 memory
           let fy item 1 memory
           ifelse fx = xcor and fy = ycor[
